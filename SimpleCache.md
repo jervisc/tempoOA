@@ -27,11 +27,29 @@ public class SimpleCache<K, V> {
             return timestamp;
         }
     }
-
+	// Reduce GC Risk: Avoid 'new CacheEntry' on every write. 
+	// Since we are having hundreds writes/sec, it could be same value is already exist,
+	// SUGGESTION: now we should only update the value instead of create a new CacheEntry
     public void put(K key, V value) {
         cache.put(key, new CacheEntry<>(value, System.currentTimeMillis()));
     }
 
+
+ 	// Memory Leak Risk
+	// There is no active eviction policy or capacity limit on when we get a cache. 
+	// Right now at hundreds of writes/sec, expired entries will never be removed unless re-accessed,
+	// otherwise it is leading to OutOfMemoryError very soon.
+	// SUGGESTION: Implement an remove expired key or use a bounded cache.
+	
+	
+	// Non-atomic "Check-then-Act" execution
+	// The current 'get' method only returns null on miss or expiry,
+	// which forces the caller to handle the data loading logic outside the cache class.
+	// Under high load, if a hot key expires, multiple threads will hit the database simultaneously, 
+	// and potentially crashing the backend service.
+	// SUGGESTION: Use 'computeIfAbsent' with a loader function to ensure only one thread 
+	// loads the data while others wait.
+	
     public V get(K key) {
         CacheEntry<V> entry = cache.get(key);
         if (entry != null) {
